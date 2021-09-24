@@ -11,7 +11,7 @@ class Skin(object):
         return self.attachments.get((slot_index, name), None)
 
     def attach_all(self, skeleton, old_skin):
-        for entry, attachment in old_skin.attachments.iteritems():
+        for entry, attachment in old_skin.attachments.items():
             slot_index, name = entry
             slot = skeleton.slots[slot_index]
             if slot.attachment == attachment:

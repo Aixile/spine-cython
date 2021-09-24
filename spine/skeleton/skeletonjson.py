@@ -116,11 +116,14 @@ class SkeletonJson(object):
         # Skins.
         skins = root_dict.get('skins', {})
         read_attachment = self.read_attachment
-        for skin_name, skin_dict in skins.iteritems():
+        for skin_data in skins:
+            skin_name = skin_data['name']
+            skin_dict = skin_data['attachments']
             skin = Skin(skin_name)
-            for slot_name, slot_entry in skin_dict.iteritems():
+
+            for slot_name, slot_entry in skin_dict.items():
                 slot_index = skeleton_data.find_slot_index(slot_name)
-                for attachment_name, attachment_dict in slot_entry.iteritems():
+                for attachment_name, attachment_dict in slot_entry.items():
                     attachment = read_attachment(
                         skin, attachment_name, attachment_dict)
                     if attachment is not None:
@@ -132,7 +135,7 @@ class SkeletonJson(object):
 
         # Events.
         events = root_dict.get('events', {})
-        for event_name, event_dict in events.iteritems():
+        for event_name, event_dict in events.items():
             event_dict = events.get(event_name)
             event_data = EventData(event_name)
             event_data.int_value = event_dict.get('int', 0)
@@ -143,7 +146,7 @@ class SkeletonJson(object):
         # Animations.
         animations = root_dict.get('animations', {})
         read_animation = self.read_animation
-        for animation_name, animation_dict in animations.iteritems():
+        for animation_name, animation_dict in animations.items():
             read_animation(animation_name, animation_dict, skeleton_data)
 
         return skeleton_data
@@ -157,6 +160,14 @@ class SkeletonJson(object):
         to_color = SkeletonJson.to_color
         get_float_list = SkeletonJson.get_float_list
         get_int_list = SkeletonJson.get_int_list
+
+        # Check if skinned mesh
+        if attachment_type == AttachmentType.mesh:
+            vs = get_float_list(
+                attachment_dict, 'vertices', scale)
+            uvs = get_float_list(attachment_dict, 'uvs', 1.0)
+            if len(vs) != len(uvs):
+                attachment_type = AttachmentType.skinnedmesh
 
         if attachment_type == AttachmentType.region:
             region = self.attachment_loader.\
@@ -263,9 +274,9 @@ class SkeletonJson(object):
         read_curve = SkeletonJson.read_curve
         to_color = SkeletonJson.to_color
         slots_dict = animation_dict.get('slots', {})
-        for slot_name, slot_dict in slots_dict.iteritems():
+        for slot_name, slot_dict in slots_dict.items():
             slot_index = skeleton_data.find_slot_index(slot_name)
-            for timeline_name, values in slot_dict.iteritems():
+            for timeline_name, values in slot_dict.items():
                 if timeline_name == 'color':
                     timeline = ColorTimeline(len(values))
                     timeline.slot_index = slot_index
@@ -277,7 +288,7 @@ class SkeletonJson(object):
                         b = to_color(color, 2)
                         a = to_color(color, 3)
                         timeline.set_frame(frame_index,
-                                           value_dict.get('time'),
+                                           value_dict.get('time', 0),
                                            r, g, b, a)
                         read_curve(timeline, frame_index, value_dict)
                         frame_index += 1
@@ -291,7 +302,7 @@ class SkeletonJson(object):
                     frame_index = 0
                     for value_dict in values:
                         timeline.set_frame(frame_index,
-                                           value_dict.get('time'),
+                                           value_dict.get('time', 0),
                                            value_dict.get('name'))
                         frame_index += 1
                     timelines.append(timeline)
@@ -305,18 +316,18 @@ class SkeletonJson(object):
                     )
 
         bones_dict = animation_dict.get('bones', {})
-        for bone_name, bone_dict in bones_dict.iteritems():
+        for bone_name, bone_dict in bones_dict.items():
             bone_index = skeleton_data.find_bone_index(bone_name)
             if bone_index == -1:
                 raise ValueError('Bone not found: {}'.format(bone_name))
-            for timeline_name, values in bone_dict.iteritems():
+            for timeline_name, values in bone_dict.items():
                 if timeline_name == 'rotate':
                     timeline = RotateTimeline(len(values))
                     timeline.bone_index = bone_index
                     frame_index = 0
                     for value_dict in values:
                         timeline.set_frame(frame_index,
-                                           value_dict.get('time'),
+                                           value_dict.get('time', 0),
                                            value_dict.get('angle'))
                         read_curve(timeline, frame_index, value_dict)
                         frame_index += 1
@@ -339,7 +350,7 @@ class SkeletonJson(object):
                         x = value_dict.get('x', 0) * timeline_scale
                         y = value_dict.get('y', 0) * timeline_scale
                         timeline.set_frame(frame_index,
-                                           value_dict.get('time'),
+                                           value_dict.get('time', 0),
                                            x, y)
                         read_curve(timeline, frame_index, value_dict)
                         frame_index += 1
@@ -359,7 +370,7 @@ class SkeletonJson(object):
                     frame_index = 0
                     for value_dict in values:
                         timeline.set_frame(frame_index,
-                                           value_dict.get('time'),
+                                           value_dict.get('time', 0),
                                            value_dict.get(field, False))
                         frame_index += 1
                     timelines.append(timeline)
@@ -373,7 +384,7 @@ class SkeletonJson(object):
                     )
 
         ik_dict = animation_dict.get('ik', {})
-        for ik_constraint_name, values in ik_dict.iteritems():
+        for ik_constraint_name, values in ik_dict.items():
             ik_constraint = skeleton_data\
                 .find_ik_constraint(ik_constraint_name)
             timeline = IkConstraintTimeline(len(values))
@@ -385,7 +396,7 @@ class SkeletonJson(object):
                 bend_positive = value_dict.get('bendPositive', True)
                 bend_direction = 1 if bend_positive is True else -1
                 timeline.set_frame(frame_index,
-                                   value_dict.get('time'),
+                                   value_dict.get('time', 0),
                                    mix,
                                    bend_direction)
                 read_curve(timeline, frame_index, value_dict)
@@ -396,11 +407,11 @@ class SkeletonJson(object):
                 timeline.frames[timeline.get_frame_count() * 3 - 3])
 
         ffd_dict = animation_dict.get('ffd', {})
-        for skin_name, slot_dict in ffd_dict.iteritems():
+        for skin_name, slot_dict in ffd_dict.items():
             skin = skeleton_data.find_skin(skin_name)
-            for slot_name, mesh_dict in slot_dict.iteritems():
+            for slot_name, mesh_dict in slot_dict.items():
                 slot_index = skeleton_data.find_slot_index(slot_name)
-                for mesh_name, values in mesh_dict.iteritems():
+                for mesh_name, values in mesh_dict.items():
                     timeline = FfdTimeline(len(values))
                     attachment = skin.get_attachment(slot_index, mesh_name)
                     if attachment is None:
@@ -443,7 +454,7 @@ class SkeletonJson(object):
                                     vertices[ii] += mesh_vertices[ii]
                                     ii += 1
                         timeline.set_frame(frame_index,
-                                           value_dict.get('time'),
+                                           value_dict.get('time', 0),
                                            vertices)
                         read_curve(timeline, frame_index, value_dict)
                         frame_index += 1
@@ -519,7 +530,7 @@ class SkeletonJson(object):
                 event.string_value = event_dict.get('string',
                                                     event.string_value)
                 timeline.set_frame(frame_index,
-                                   event_dict.get('time'),
+                                   event_dict.get('time', 0),
                                    event)
                 frame_index += 1
             timelines.append(timeline)
@@ -557,9 +568,9 @@ class SkeletonJson(object):
         if scale == 1.0:
             return a_list[:]
         else:
-            return map(lambda x: x * scale, a_list)
+            return [t for t in map(lambda x: x * scale, a_list)]
 
     @staticmethod
     def get_int_list(a_dict, name):
         a_list = a_dict.get(name)
-        return map(int, a_list)
+        return [t for t in map(int, a_list)]
